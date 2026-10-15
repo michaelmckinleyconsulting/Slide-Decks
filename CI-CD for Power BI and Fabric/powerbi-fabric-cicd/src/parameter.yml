@@ -1,0 +1,17 @@
+# fabric-cicd swaps each find_value for the replace_value of the --environment
+# you deploy to. Use it for anything environment-specific that is baked into the
+# item definitions: workspace IDs, lakehouse/warehouse IDs, SQL endpoint hosts.
+# Values below are placeholders; replace them with your own.
+
+find_replace:
+  # SQL analytics endpoint host used by the semantic model's source expressions
+  - find_value: "dev-sales.datawarehouse.fabric.microsoft.com"
+    replace_value:
+      test: "test-sales.datawarehouse.fabric.microsoft.com"
+      prod: "prod-sales.datawarehouse.fabric.microsoft.com"
+
+  # Dev workspace ID referenced in the definitions
+  - find_value: "00000000-0000-0000-0000-000000000001"
+    replace_value:
+      test: "00000000-0000-0000-0000-000000000002"
+      prod: "00000000-0000-0000-0000-000000000003"

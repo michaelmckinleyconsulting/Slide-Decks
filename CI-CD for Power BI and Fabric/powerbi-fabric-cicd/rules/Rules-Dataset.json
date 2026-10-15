@@ -1,0 +1,22 @@
+[
+  {
+    "ID": "TEAM_MEASURE_FORMAT_STRING",
+    "Name": "Visible measures must have a format string",
+    "Category": "Formatting",
+    "Description": "Every visible measure needs a format string so values render consistently in every report. Severity 3 blocks the pull request. Measures that use a dynamic format string are also flagged; add a static fallback format string or exclude them.",
+    "Severity": 3,
+    "Scope": "Measure",
+    "Expression": "IsVisible and string.IsNullOrWhitespace(FormatString)",
+    "CompatibilityLevel": 1200
+  },
+  {
+    "ID": "TEAM_MEASURE_DESCRIPTION",
+    "Name": "Visible measures should have a description",
+    "Category": "Maintenance",
+    "Description": "Descriptions appear as tooltips in the field list and tell reviewers what a measure is for. Severity 2 is reported as a warning and does not block the pull request.",
+    "Severity": 2,
+    "Scope": "Measure",
+    "Expression": "IsVisible and string.IsNullOrWhitespace(Description)",
+    "CompatibilityLevel": 1200
+  }
+]

@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------------------
+# Release pipeline: deploy /src to Test, then (after approval) to Prod,
+# using fabric-cicd and a service principal.
+#
+# Prerequisites
+#  - An Azure Resource Manager service connection (workload identity federation
+#    recommended) named below. Its service principal needs Contributor (or higher)
+#    on the Test and Prod workspaces.
+#  - Fabric tenant setting: service principals can use Fabric APIs.
+#  - ADO Environments "fabric-test" and "fabric-prod". Add an Approvals check to
+#    fabric-prod: that approval becomes part of your audit trail.
+#  - First deployment of a model with data sources: set its credentials once in
+#    the Fabric portal; later deployments reuse them.
+# ---------------------------------------------------------------------------
+
+trigger:
+  branches:
+    include: [ main ]
+  paths:
+    include: [ src ]
+
+variables:
+  serviceConnection: fabric-cicd-spn   # name of your ADO service connection
+  projectName: Sales                    # matches project_name in terraform/terraform.tfvars
+  fabricCicdVersion: 1.4.0              # pin, then upgrade deliberately
+
+stages:
+- stage: Test
+  displayName: Deploy to Test
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: ubuntu-latest
+    environment: fabric-test
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: pip install fabric-cicd==$(fabricCicdVersion)
+            displayName: Install fabric-cicd
+          - task: AzureCLI@2
+            displayName: Publish to $(projectName) [Test]
+            inputs:
+              azureSubscription: ${{ variables.serviceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                python deploy/deploy.py --workspace-name "$(projectName) [Test]" --environment test --spn-auth
+
+- stage: Prod
+  displayName: Deploy to Prod
+  dependsOn: Test
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: ubuntu-latest
+    environment: fabric-prod   # approval check pauses the run here
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.12'
+          - script: pip install fabric-cicd==$(fabricCicdVersion)
+            displayName: Install fabric-cicd
+          - task: AzureCLI@2
+            displayName: Publish to $(projectName) [Prod]
+            inputs:
+              azureSubscription: ${{ variables.serviceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                python deploy/deploy.py --workspace-name "$(projectName) [Prod]" --environment prod --spn-auth

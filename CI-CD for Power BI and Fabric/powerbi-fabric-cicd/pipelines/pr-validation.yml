@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+# PR build validation for Power BI Projects (PBIP / TMDL)
+#
+# Runs Tabular Editor 2's Best Practice Analyzer against every semantic model
+# in the repo. Severity-3 rule violations fail the build, which blocks the PR.
+#
+# Wire it up:  Azure Repos > Branches > main > Branch policies > Build validation
+#              > + > select this pipeline > Policy requirement: Required
+#
+# Adapted from Microsoft's Power BI developer mode sample:
+#   https://aka.ms/pbidevmode-ado-cipipeline
+# Tabular Editor 2 is a free, open-source community tool (not supported by Microsoft).
+# ---------------------------------------------------------------------------
+
+trigger: none   # runs from the branch policy, not on every push
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  # Pinned so a new upstream release can't change your build. Upgrade deliberately.
+  tabularEditorUrl: https://github.com/TabularEditor/TabularEditor/releases/download/2.29.0/TabularEditor.Portable.zip
+  defaultRulesUrl: https://raw.githubusercontent.com/microsoft/Analysis-Services/d3ccb5032c9029b097276b88412f7b61df6e73b8/BestPracticeRules/BPARules.json
+
+jobs:
+- job: Validate_SemanticModels
+  displayName: Best Practice Analyzer (semantic models)
+  steps:
+  - checkout: self
+
+  - task: PowerShell@2
+    displayName: Download Tabular Editor 2
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+        $toolDir = "$(Agent.TempDirectory)\TabularEditor"
+        New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
+        Invoke-WebRequest -Uri "$(tabularEditorUrl)" -OutFile "$toolDir\TabularEditor.zip"
+        Expand-Archive -Path "$toolDir\TabularEditor.zip" -DestinationPath $toolDir -Force
+
+  - task: PowerShell@2
+    displayName: Run Best Practice Analyzer
+    inputs:
+      targetType: inline
+      pwsh: true
+      script: |
+        $toolDir = "$(Agent.TempDirectory)\TabularEditor"
+
+        # Use your team's rules (rules/Rules-Dataset.json) if the repo has them;
+        # otherwise fall back to Microsoft's default rule set.
+        $rules = Join-Path "$(Build.SourcesDirectory)" "rules\Rules-Dataset.json"
+        if (-not (Test-Path $rules)) {
+          $rules = "$toolDir\BPARules.json"
+          Invoke-WebRequest -Uri "$(defaultRulesUrl)" -OutFile $rules
+        }
+        Write-Host "Using rules: $rules"
+
+        $models = Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Directory -Filter "*.SemanticModel"
+        if (-not $models) { Write-Host "No semantic models found."; exit 0 }
+
+        $failed = $false
+        foreach ($model in $models) {
+          # TMDL lives in <Model>.SemanticModel\definition; older projects use model.bim
+          $definition = Join-Path $model.FullName "definition"
+          if (-not (Test-Path $definition)) { $definition = Join-Path $model.FullName "model.bim" }
+
+          Write-Host "Analyzing $($model.Name)"
+          # -A = run Best Practice Analyzer with the rules file
+          # -V = write results as Azure DevOps logging commands (errors/warnings in the PR)
+          $p = Start-Process -FilePath "$toolDir\TabularEditor.exe" `
+                 -ArgumentList "`"$definition`" -A `"$rules`" -V" `
+                 -NoNewWindow -Wait -PassThru
+          if ($p.ExitCode -ne 0) { $failed = $true }
+        }
+
+        if ($failed) { exit 1 }

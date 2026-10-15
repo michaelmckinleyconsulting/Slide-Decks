@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in. Keep terraform.tfvars out of source control
+# if it holds anything you consider sensitive.
+project_name       = "Sales"
+capacity_name      = "my-fabric-capacity"
+developer_group_id = "00000000-0000-0000-0000-000000000000"
+deployer_object_id = "00000000-0000-0000-0000-000000000000"
+ado_organization   = "contoso"
+ado_project        = "BI"
+ado_repository     = "sales-analytics"
